@@ -7,7 +7,7 @@
   "use strict";
 
   var KEY_ON = "dx.disguiseOn";
-  var DEF = { rect: null, font: "sheet", size: 13, color: "#202124", flow: "rows", rowH: 21, tab: "Bảng tính 1" };
+  var DEF = { tpl: "sheet", rect: null, font: "sheet", size: 13, color: "#202124", flow: "rows", rowH: 21, tab: "Bảng tính 1" };
   var FONTS = {
     sheet: 'Arial, "Helvetica Neue", Helvetica, sans-serif',
     app: '"Segoe UI", system-ui, -apple-system, Roboto, sans-serif',
@@ -119,17 +119,24 @@
     box.innerHTML =
       '<div class="dg-panel">' +
       '<div class="dg-head"><h3>Đọc ngụy trang</h3><button type="button" class="iconbtn" data-x aria-label="Đóng">✕</button></div>' +
+      '<div class="dg-tpls" role="radiogroup" aria-label="Kiểu ngụy trang">' +
+      '<label class="dg-tpl"><input type="radio" name="dgTpl" value="sheet"><span class="dg-tpl-pic sheet"></span><b>Bảng tính</b><small>Truyện nằm trong các ô của bảng</small></label>' +
+      '<label class="dg-tpl"><input type="radio" name="dgTpl" value="design"><span class="dg-tpl-pic design"></span><b>Thiết kế banner</b><small>Truyện là chữ mô tả dưới banner</small></label>' +
+      '<label class="dg-tpl"><input type="radio" name="dgTpl" value="image"><span class="dg-tpl-pic image"></span><b>Ảnh của bạn</b><small>Dùng ảnh chụp màn hình bất kỳ</small></label>' +
+      '</div>' +
+      '<div id="dgImgPart">' +
       '<p class="dg-hint">Chọn hoặc dán (Ctrl+V) ảnh chụp màn hình một phần mềm bất kỳ, rồi <b>kéo chọn vùng</b> muốn chữ hiện lên. Ảnh chỉ lưu trên máy bạn.</p>' +
       '<label class="btn ghost dg-file"><input type="file" accept="image/*" id="dgFile" hidden>Chọn ảnh chụp màn hình</label>' +
       '<div class="dg-preview" id="dgPrev"><div class="dg-empty">Chưa có ảnh</div></div>' +
       '<div class="dg-row"><button type="button" class="btn line" id="dgAuto" disabled>Tự tìm vùng trống</button><span class="dg-note" id="dgNote"></span></div>' +
+      '</div>' +
       '<div class="dg-grid">' +
-      '<label>Kiểu chữ<select id="dgFont"><option value="sheet">Bảng tính (Arial)</option><option value="app">Phần mềm (Segoe UI)</option><option value="doc">Văn bản (Times)</option></select></label>' +
-      '<label>Kiểu dòng<select id="dgFlow"><option value="rows">Liền dòng như ô bảng tính</option><option value="para">Đoạn văn</option></select></label>' +
-      '<label>Cỡ chữ (px trên ảnh)<input id="dgSize" type="number" min="8" max="40" step="1"></label>' +
-      '<label>Chiều cao dòng (px)<input id="dgRowH" type="number" min="10" max="60" step="1"></label>' +
-      '<label>Màu chữ<input id="dgColor" type="color"></label>' +
-      '<label>Tên tab trình duyệt<input id="dgTab" type="text" maxlength="60"></label>' +
+      '<label class="img-only">Kiểu chữ<select id="dgFont"><option value="sheet">Bảng tính (Arial)</option><option value="app">Phần mềm (Segoe UI)</option><option value="doc">Văn bản (Times)</option></select></label>' +
+      '<label class="img-only">Kiểu dòng<select id="dgFlow"><option value="rows">Liền dòng như ô bảng tính</option><option value="para">Đoạn văn</option></select></label>' +
+      '<label class="img-only">Cỡ chữ (px trên ảnh)<input id="dgSize" type="number" min="8" max="40" step="1"></label>' +
+      '<label class="img-only">Chiều cao dòng (px)<input id="dgRowH" type="number" min="10" max="60" step="1"></label>' +
+      '<label class="img-only">Màu chữ<input id="dgColor" type="color"></label>' +
+      '<label>Tên tab / tên tệp<input id="dgTab" type="text" maxlength="60"></label>' +
       '</div>' +
       '<div class="dg-actions"><button type="button" class="btn ghost" data-x>Huỷ</button><button type="button" class="btn" id="dgGo" disabled>Bắt đầu đọc</button></div>' +
       '</div>';
@@ -138,6 +145,15 @@
     var $ = function (id) { return document.getElementById(id); };
     $("dgFont").value = S.font; $("dgFlow").value = S.flow; $("dgSize").value = S.size;
     $("dgRowH").value = S.rowH; $("dgColor").value = S.color; $("dgTab").value = S.tab;
+    var tpl = S.tpl;
+    function setTpl(v) {
+      tpl = v;
+      box.querySelectorAll('input[name="dgTpl"]').forEach(function (r) { r.checked = r.value === v; });
+      $("dgImgPart").hidden = v !== "image";
+      box.querySelectorAll(".img-only").forEach(function (el) { el.hidden = v !== "image"; });
+      $("dgGo").disabled = v === "image" ? !rect || !img : false;
+    }
+    box.querySelectorAll('input[name="dgTpl"]').forEach(function (r) { r.addEventListener("change", function () { setTpl(r.value); }); });
 
     var prev = $("dgPrev"), rect = S.rect, img = null, sel = null;
     function drawSel() {
@@ -145,7 +161,7 @@
       if (!rect) { sel.hidden = true; return; }
       sel.hidden = false;
       sel.style.left = rect.x + "%"; sel.style.top = rect.y + "%"; sel.style.width = rect.w + "%"; sel.style.height = rect.h + "%";
-      $("dgGo").disabled = false;
+      if (tpl === "image") $("dgGo").disabled = false;
     }
     function setImage(url) {
       dataUrl = url;
@@ -173,6 +189,7 @@
       for (var i = 0; i < items.length; i++) if (items[i].type.indexOf("image/") === 0) { readFile(items[i].getAsFile()); e.preventDefault(); break; }
     }
     document.addEventListener("paste", onPaste);
+    setTpl(tpl);
     $("dgAuto").addEventListener("click", function () { if (img) { rect = autoRegion(img); drawSel(); } });
 
     // kéo chọn vùng
@@ -198,12 +215,12 @@
     box.querySelectorAll("[data-x]").forEach(function (b) { b.addEventListener("click", close); });
     $("dgGo").addEventListener("click", function () {
       var ns = {
-        rect: rect, font: $("dgFont").value, flow: $("dgFlow").value,
+        tpl: tpl, rect: rect, font: $("dgFont").value, flow: $("dgFlow").value,
         size: Number($("dgSize").value) || DEF.size, rowH: Number($("dgRowH").value) || DEF.rowH,
         color: $("dgColor").value, tab: $("dgTab").value || DEF.tab
       };
       lsSet("dx.disguise", ns);
-      (dataUrl ? imgSave(dataUrl) : Promise.resolve()).then(function () { close(); if (thenStart) start_(); });
+      (dataUrl && tpl === "image" ? imgSave(dataUrl) : Promise.resolve()).then(function () { close(); if (thenStart) start_(); });
     });
   }
 
@@ -212,6 +229,7 @@
   function start_() {
     imgLoad().then(function (url) {
       var S = settings();
+      if (S.tpl !== "image" && window.DXTemplates && window.DXTemplates[S.tpl]) return startTemplate(S);
       if (!url || !S.rect) { openSetup(true); return; }
       stop(true);
       ssSet(KEY_ON, true);
@@ -271,6 +289,30 @@
       }
     });
   }
+  function startTemplate(S) {
+    stop(true);
+    ssSet(KEY_ON, true);
+    var c = chapterText();
+    var ov = document.createElement("div");
+    ov.id = "dgView"; ov.className = "dg-view tpl";
+    ov.innerHTML = '<div id="dgTpl"></div>' + dockHtml();
+    document.body.appendChild(ov);
+    document.body.classList.add("dg-on");
+    if (oldTitle === null) oldTitle = document.title;
+    document.title = S.tab;
+    var scroller = window.DXTemplates[S.tpl](document.getElementById("dgTpl"), c, S);
+    if (scroller) { scroller.id = scroller.id || "dgScroll"; scroller.focus({ preventScroll: true }); }
+    ov.querySelector(".dg-dock").addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (b) act(b.dataset.a);
+    });
+  }
+  function dockHtml() {
+    return '<div class="dg-dock" aria-label="Điều khiển">' +
+      '<button type="button" data-a="prev" aria-label="Chương trước">‹</button>' +
+      '<button type="button" data-a="next" aria-label="Chương sau">›</button>' +
+      '<button type="button" data-a="setup" aria-label="Chỉnh ngụy trang">⚙</button>' +
+      '<button type="button" data-a="exit" aria-label="Thoát ngụy trang">✕</button></div>';
+  }
   function stop(keepFlag) {
     var ov = document.getElementById("dgView");
     if (ov) { if (ov._cleanup) ov._cleanup(); ov.remove(); }
@@ -291,7 +333,7 @@
   document.addEventListener("keydown", function (e) {
     if (!document.getElementById("dgView")) return;
     if (document.getElementById("gateModal")) return;
-    var tx = document.getElementById("dgText");
+    var tx = document.getElementById("dgText") || document.querySelector("#dgView [data-dg-scroll]");
     if (e.key === "Escape") { stop(false); e.preventDefault(); }
     else if (e.key === "ArrowRight") { act("next"); e.preventDefault(); }
     else if (e.key === "ArrowLeft") { act("prev"); e.preventDefault(); }
