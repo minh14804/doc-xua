@@ -49,6 +49,9 @@ window.SITE_CONFIG = {
      blurb : giới thiệu ngắn (tự viết)
      tags  : khớp với shelves ở trên
      shopee: (tuỳ chọn) link affiliate mua bản sách giấy của riêng tác phẩm này
+     cover : (tuỳ chọn) ảnh bìa riêng, ví dụ cover: "covers/to-tam.jpg" (đặt file trong thư mục covers/).
+             Chỉ dùng ảnh bạn có quyền: tự thiết kế, đặt vẽ, ảnh stock miễn phí (Unsplash, Pexels...).
+             Không có cover → web tự lấy ảnh bìa trên Wikisource nếu có, nếu không thì dùng bìa tự vẽ.
      Tác phẩm nào không có trên Wikisource sẽ tự ẩn khi tải trang.
 
      TRUYỆN RIÊNG CỦA BẠN (tự viết / thuê viết / đã mua bản quyền):

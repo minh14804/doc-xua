@@ -44,7 +44,18 @@
   ];
   function hash(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
   function palette(t) { return PALETTES[hash(rootOf(t)) % PALETTES.length]; }
+  var thumbs = {};   // tên trang Wikisource -> ảnh bìa (Wikimedia Commons)
+  function coverImg(t) {
+    var root = rootOf(t);
+    var b = C.catalog.find(function (x) { return x.title === root || (existence && existence.get(x.title) === root); });
+    if (b && b.cover) return b.cover;
+    return thumbs[root] || (b && thumbs[b.title]) || null;
+  }
   function cover(t, author) {
+    var img = coverImg(t);
+    if (img) {
+      return '<span class="cover has-img"><img src="' + esc(img) + '" alt="Bìa ' + esc(rootOf(t)) + '" loading="lazy" referrerpolicy="no-referrer"></span>';
+    }
     var p = palette(t), name = rootOf(t);
     var size = name.length > 14 ? "18px" : name.length > 8 ? "21px" : "25px";
     return '<span class="cover" style="--c1:' + p[0] + ';--c2:' + p[1] + ';--c3:' + p[2] + ';--ct-size:' + size + '">' +
@@ -74,7 +85,7 @@
     var locals = C.catalog.filter(function (b) { return b.source === "local"; });
     var batches = [];
     for (var i = 0; i < titles.length; i += 50) batches.push(titles.slice(i, i + 50));
-    return Promise.all(batches.map(function (bt) { return api({ action: "query", redirects: 1, titles: bt.join("|") }); })).then(function (ds) {
+    return Promise.all(batches.map(function (bt) { return api({ action: "query", redirects: 1, titles: bt.join("|"), prop: "pageimages", piprop: "thumbnail", pithumbsize: 480, pilimit: 50 }); })).then(function (ds) {
       var d = { query: { normalized: [], redirects: [], pages: [] } };
       ds.forEach(function (x) { var q = x.query || {}; ["normalized", "redirects", "pages"].forEach(function (k) { d.query[k] = d.query[k].concat(q[k] || []); }); });
       return d;
@@ -83,7 +94,10 @@
       locals.forEach(function (b) { map.set(b.title, b.title); });
       (q.normalized || []).forEach(function (n) { alias[n.from] = n.to; });
       (q.redirects || []).forEach(function (n) { alias[n.from] = n.to; });
-      (q.pages || []).forEach(function (p) { if (!p.missing && !p.invalid) ok[p.title] = true; });
+      (q.pages || []).forEach(function (p) {
+        if (!p.missing && !p.invalid) ok[p.title] = true;
+        if (p.thumbnail && p.thumbnail.source) thumbs[p.title] = p.thumbnail.source;
+      });
       titles.forEach(function (t) {
         var r = t; for (var i = 0; i < 3 && alias[r]; i++) r = alias[r];
         map.set(t, ok[r] ? r : null);
