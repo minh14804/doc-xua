@@ -6,6 +6,9 @@
 <title>Đọc Xưa</title>
 <meta name="description" content="Đọc miễn phí tiểu thuyết, truyện và thơ Việt Nam kinh điển.">
 <meta http-equiv="Cache-Control" content="no-cache">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#e3f3ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1d2826" media="(prefers-color-scheme: dark)">
 <script>
   /* Luôn tải bản mới nhất của CSS/JS/config: gắn mốc thời gian vào đường dẫn
      để trình duyệt không dùng lại bản cũ trong bộ nhớ đệm. */
@@ -19,7 +22,6 @@
 <script>
   try {
     var s = JSON.parse(localStorage.getItem("dx.settings") || "{}");
-    if (s.theme && s.theme !== "auto") document.documentElement.dataset.theme = s.theme;
     if (s.size) document.documentElement.style.setProperty("--read-size", s.size + "px");
     if (s.font === "sans") document.documentElement.dataset.font = "sans";
   } catch (e) {}
@@ -50,15 +52,6 @@
         <button type="button" data-size="-1" aria-label="Chữ nhỏ hơn">A−</button>
         <output id="sizeOut">19</output>
         <button type="button" data-size="1" aria-label="Chữ lớn hơn">A+</button>
-      </div>
-    </div>
-    <div class="settings-row">
-      <span class="lbl">Nền</span>
-      <div class="seg">
-        <button type="button" data-theme="auto">Tự động</button>
-        <button type="button" data-theme="light">Sáng</button>
-        <button type="button" data-theme="paper">Giấy</button>
-        <button type="button" data-theme="dark">Tối</button>
       </div>
     </div>
     <div class="settings-row">

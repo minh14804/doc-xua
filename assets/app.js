@@ -424,7 +424,8 @@
   var $set = document.getElementById("settings"), $btn = document.getElementById("settingsBtn");
   function applySettings() {
     var r = document.documentElement;
-    if (S.theme === "auto") delete r.dataset.theme; else r.dataset.theme = S.theme;
+    delete r.dataset.theme;   /* sáng/tối luôn theo hệ thống */
+    S.theme = "auto";
     if (S.font === "sans") r.dataset.font = "sans"; else delete r.dataset.font;
     r.style.setProperty("--read-size", S.size + "px");
     document.getElementById("sizeOut").textContent = S.size;
