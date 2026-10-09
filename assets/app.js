@@ -18,9 +18,16 @@
   function parentOf(t) { var i = t.lastIndexOf("/"); return i < 0 ? null : t.slice(0, i); }
   function rootOf(t) { return t.split("/")[0]; }
   function setTitle(t) { document.title = t ? t + " · " + C.siteName : C.siteName; }
-  function api(params) {
+  /* các nguồn Wikisource: vi (mặc định), en ... — khai báo trong config.wikis */
+  var WIKIS = Object.assign({ vi: { api: C.wikiApi, base: C.wikiBase } }, C.wikis || {});
+  function langOf(t) {
+    var root = rootOf(t);
+    var b = C.catalog.find(function (x) { return x.title === root || (existence && existence.get(x.title) === root); });
+    return (b && b.wiki && WIKIS[b.wiki]) ? b.wiki : "vi";
+  }
+  function api(params, lang) {
     var qs = Object.keys(params).map(function (k) { return k + "=" + encodeURIComponent(params[k]); }).join("&");
-    return fetch(C.wikiApi + "?format=json&formatversion=2&origin=*&" + qs).then(function (r) {
+    return fetch(WIKIS[lang || "vi"].api + "?format=json&formatversion=2&origin=*&" + qs).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     });
@@ -81,11 +88,18 @@
   /* ---------- kiểm tra tác phẩm còn trên Wikisource ---------- */
   function checkCatalog() {
     if (existence) return Promise.resolve(existence);
-    var titles = C.catalog.filter(function (b) { return b.source !== "local"; }).map(function (b) { return b.title; });
+    var remote = C.catalog.filter(function (b) { return b.source !== "local"; });
+    var titles = remote.map(function (b) { return b.title; });
     var locals = C.catalog.filter(function (b) { return b.source === "local"; });
     var batches = [];
-    for (var i = 0; i < titles.length; i += 50) batches.push(titles.slice(i, i + 50));
-    return Promise.all(batches.map(function (bt) { return api({ action: "query", redirects: 1, titles: bt.join("|"), prop: "pageimages", piprop: "thumbnail", pithumbsize: 480, pilimit: 50 }); })).then(function (ds) {
+    Object.keys(WIKIS).forEach(function (lang) {
+      var ts = remote.filter(function (b) { return (b.wiki || "vi") === lang; }).map(function (b) { return b.title; });
+      for (var i = 0; i < ts.length; i += 50) batches.push({ lang: lang, titles: ts.slice(i, i + 50) });
+    });
+    return Promise.all(batches.map(function (bt) {
+      return api({ action: "query", redirects: 1, titles: bt.titles.join("|"), prop: "pageimages", piprop: "thumbnail", pithumbsize: 480, pilimit: 50 }, bt.lang)
+        .catch(function () { return {}; });
+    })).then(function (ds) {
       var d = { query: { normalized: [], redirects: [], pages: [] } };
       ds.forEach(function (x) { var q = x.query || {}; ["normalized", "redirects", "pages"].forEach(function (k) { d.query[k] = d.query[k].concat(q[k] || []); }); });
       return d;
@@ -137,14 +151,15 @@
     if (cache.has(title)) return Promise.resolve(cache.get(title));
     var lb = localBook(title);
     if (lb) return fetchLocal(lb, title);
-    return api({ action: "parse", page: title, redirects: 1, prop: "text", disableeditsection: 1 }).then(function (d) {
+    var lang = langOf(title);
+    return api({ action: "parse", page: title, redirects: 1, prop: "text", disableeditsection: 1 }, lang).then(function (d) {
       if (d.error) throw new Error(d.error.code === "missingtitle" ? "missing" : d.error.info);
-      var real = d.parse.title, page = clean(d.parse.text, real);
+      var real = d.parse.title, page = clean(d.parse.text, real, WIKIS[lang].base);
       page.title = real; cache.set(title, page); cache.set(real, page);
       return page;
     });
   }
-  function clean(html, title) {
+  function clean(html, title, base) {
     var doc = new DOMParser().parseFromString(html, "text/html"), root = doc.body;
     root.querySelectorAll([
       "script", "style", "link", "meta", ".mw-editsection", ".noprint", ".navbox", ".ws-noexport",
@@ -160,7 +175,7 @@
           a.setAttribute("href", route(t));
           if (t.indexOf(title + "/") === 0 && !seen[t]) { seen[t] = 1; chapters.push({ title: t, label: a.textContent.trim() || lastPart(t) }); }
         } else {
-          a.setAttribute("href", C.wikiBase + href.slice(6)); a.target = "_blank"; a.rel = "noopener"; a.className = "ext";
+          a.setAttribute("href", (base || C.wikiBase) + href.slice(6)); a.target = "_blank"; a.rel = "noopener"; a.className = "ext";
         }
       } else if (/^https?:|^\/\//.test(href)) {
         a.target = "_blank"; a.rel = "noopener nofollow";
@@ -189,7 +204,10 @@
   function viewHome() {
     setTitle(""); nav("home");
     var books = visibleBooks();
-    var feat = books.find(function (b) { return b.title === C.featured; }) || books[0];
+    /* trang chủ chỉ hiện truyện có ảnh bìa; truyện chưa có bìa nằm trong trang thể loại */
+    var covered = books.filter(function (b) { return !!coverImg(b.title); });
+    var feat = covered.find(function (b) { return b.title === C.featured; }) || covered[0] ||
+      books.find(function (b) { return b.title === C.featured; }) || books[0];
     var html = '<div class="wrap">';
     if (feat) {
       var fp = palette(feat.title);
@@ -209,8 +227,9 @@
       }));
     }
     (C.shelves || []).forEach(function (s) {
-      var list = books.filter(function (b) { return (b.tags || []).indexOf(s.tag) >= 0; });
-      if (list.length) html += rowHtml(s.name, s.sub, list.map(function (b) { return card(b); }));
+      var all = books.filter(function (b) { return (b.tags || []).indexOf(s.tag) >= 0; });
+      var list = all.filter(function (b) { return !!coverImg(b.title); });
+      if (list.length) html += rowHtml(s.name, s.sub, list.map(function (b) { return card(b); }), s.tag, all.length);
     });
     html += '<div class="genres">' + (C.shelves || []).map(function (s) {
       return '<a class="chip" href="#/browse/' + encodeURIComponent(s.tag) + '">' + esc(s.name) + '</a>';
@@ -218,8 +237,9 @@
     $app.innerHTML = html;
     bindRows(); bindLib();
   }
-  function rowHtml(name, sub, cards) {
+  function rowHtml(name, sub, cards, tag, total) {
     return '<section class="row"><div class="row-h"><div><h2>' + esc(name) + '</h2>' + (sub ? '<p>' + esc(sub) + '</p>' : "") + '</div>' +
+      (tag ? '<a class="see-all" href="#/browse/' + encodeURIComponent(tag) + '">Xem tất cả ' + total + ' truyện ›</a>' : "") +
       '<div class="row-nav"><button type="button" data-dir="-1" aria-label="Lùi">‹</button><button type="button" data-dir="1" aria-label="Tiếp">›</button></div></div>' +
       '<div class="rail">' + cards.join("") + '</div></section>';
   }

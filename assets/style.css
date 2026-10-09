@@ -368,6 +368,11 @@ button { font: inherit; }
 .search input { background: var(--sunk); }
 .local-tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .06em; }
 
+.row-h { flex-wrap: wrap; }
+.see-all { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--accent); text-decoration: none; white-space: nowrap; align-self: center; }
+.see-all:hover { text-decoration: underline; }
+.lang-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; vertical-align: middle; }
+
 /* ---------- popup affiliate ---------- */
 body.gated { overflow: hidden; }
 body.gated main, body.gated .topbar, body.gated .foot { filter: blur(3px); pointer-events: none; user-select: none; }

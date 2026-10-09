@@ -8,6 +8,10 @@ window.SITE_CONFIG = {
   /* Nguồn nội dung: Wikisource tiếng Việt (tác phẩm hết bản quyền / giấy phép mở) */
   wikiApi: "https://vi.wikisource.org/w/api.php",
   wikiBase: "https://vi.wikisource.org/wiki/",
+  /* Nguồn phụ: Wikisource tiếng Anh (kinh điển phạm vi công cộng). Truyện dùng nguồn này ghi wiki: "en". */
+  wikis: {
+    en: { api: "https://en.wikisource.org/w/api.php", base: "https://en.wikisource.org/wiki/" }
+  },
 
   /* ---------- AFFILIATE ----------
      enabled      : bật/tắt toàn bộ phần affiliate
@@ -37,6 +41,7 @@ window.SITE_CONFIG = {
     { tag: "tho-tinh", name: "Thơ tình & truyện thơ", sub: "Lục bát, ngâm khúc, những cuộc tình bằng thơ" },
     { tag: "nam-bo", name: "Tình cảm Nam Bộ", sub: "Giọng văn miệt vườn của Hồ Biểu Chánh" },
     { tag: "co-tich", name: "Cổ tích & truyền kỳ", sub: "Chuyện xưa kể lại, nhẹ nhàng trước giờ ngủ" },
+    { tag: "lang-man-anh", name: "Kinh điển lãng mạn (tiếng Anh)", sub: "Jane Austen, chị em Brontë… đọc bản gốc" },
     { tag: "phan-nguoi", name: "Phận người", sub: "Những người phụ nữ giữa thời cuộc" },
     { tag: "truyen-rieng", name: "Truyện độc quyền", sub: "Truyện mới đăng riêng trên Đọc Xưa" }
   ],
@@ -125,6 +130,28 @@ window.SITE_CONFIG = {
       blurb: "Mối tình giữa chàng Phan Sinh và ni cô Diệu Thường, một truyện thơ Nôm tình duyên quen thuộc." },
     { title: "Lục Vân Tiên", author: "Nguyễn Đình Chiểu", year: 1865, genre: "Truyện thơ", tags: ["tho-tinh", "nam-bo"],
       blurb: "Mối tình chung thủy Vân Tiên – Nguyệt Nga giữa bao gian truân. Truyện thơ được người Nam Bộ thuộc lòng." },
+
+    /* --- Kinh điển lãng mạn tiếng Anh (nguồn: en.wikisource.org) --- */
+    { title: "Pride and Prejudice", wiki: "en", author: "Jane Austen", year: 1813, genre: "Lãng mạn (tiếng Anh)", tags: ["lang-man-anh", "ngon-tinh"],
+      blurb: "Kiêu hãnh và định kiến: Elizabeth Bennet và Darcy, cặp đôi kinh điển nhất của tiểu thuyết lãng mạn. Đọc bằng tiếng Anh nguyên bản." },
+    { title: "Sense and Sensibility", wiki: "en", author: "Jane Austen", year: 1811, genre: "Lãng mạn (tiếng Anh)", tags: ["lang-man-anh"],
+      blurb: "Lý trí và tình cảm: hai chị em nhà Dashwood với hai cách yêu rất khác nhau." },
+    { title: "Emma", wiki: "en", author: "Jane Austen", year: 1815, genre: "Lãng mạn (tiếng Anh)", tags: ["lang-man-anh"],
+      blurb: "Cô tiểu thư thích se duyên cho người khác nhưng lại mù mờ về trái tim mình." },
+    { title: "Persuasion", wiki: "en", author: "Jane Austen", year: 1817, genre: "Lãng mạn (tiếng Anh)", tags: ["lang-man-anh"],
+      blurb: "Thuyết phục: mối tình bị chia cắt tám năm trước có còn cơ hội quay lại?" },
+    { title: "Jane Eyre", wiki: "en", author: "Charlotte Brontë", year: 1847, genre: "Lãng mạn (tiếng Anh)", tags: ["lang-man-anh", "phan-nguoi"],
+      blurb: "Cô gia sư mồ côi giàu nghị lực và mối tình với ông chủ Rochester bí ẩn." },
+    { title: "Wuthering Heights", wiki: "en", author: "Emily Brontë", year: 1847, genre: "Lãng mạn (tiếng Anh)", tags: ["lang-man-anh"],
+      blurb: "Đồi gió hú: tình yêu dữ dội và đầy ám ảnh giữa Heathcliff và Catherine." },
+    { title: "Little Women", wiki: "en", author: "Louisa May Alcott", year: 1868, genre: "Gia đình (tiếng Anh)", tags: ["lang-man-anh", "tinh-cam"],
+      blurb: "Những người phụ nữ nhỏ bé: bốn chị em nhà March lớn lên, yêu và tìm con đường riêng." },
+    { title: "Anne of Green Gables", wiki: "en", author: "L. M. Montgomery", year: 1908, genre: "Thiếu nữ (tiếng Anh)", tags: ["lang-man-anh"],
+      blurb: "Anne tóc đỏ: cô bé mồ côi mơ mộng và đầy tưởng tượng ở đảo Hoàng tử Edward." },
+    { title: "The Secret Garden", wiki: "en", author: "Frances Hodgson Burnett", year: 1911, genre: "Thiếu nữ (tiếng Anh)", tags: ["lang-man-anh", "co-tich"],
+      blurb: "Khu vườn bí mật: cô bé Mary hồi sinh một khu vườn bỏ hoang và cả chính mình." },
+    { title: "A Little Princess", wiki: "en", author: "Frances Hodgson Burnett", year: 1905, genre: "Thiếu nữ (tiếng Anh)", tags: ["lang-man-anh", "co-tich"],
+      blurb: "Công chúa nhỏ: Sara giữ trọn sự tử tế dù rơi từ giàu sang xuống cảnh túng quẫn." },
 
     /* --- Cổ tích --- */
     { title: "Truyện cổ nước Nam", author: "Nguyễn Văn Ngọc", year: 1932, genre: "Cổ tích", tags: ["co-tich"],
