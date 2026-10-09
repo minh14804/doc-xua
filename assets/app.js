@@ -2,19 +2,22 @@
 (function () {
   "use strict";
   var C = window.SITE_CONFIG;
+  var A = C.affiliate || {};
   var $app = document.getElementById("app");
-  var cache = new Map();          // title -> {title, html, chapters}
-  var existence = null;           // Map catalogTitle -> resolvedTitle | null
+  var cache = new Map();      // title -> page
+  var existence = null;       // Map catalogTitle -> resolvedTitle | null
 
   /* ---------- lưu trữ an toàn ---------- */
   function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 
   /* ---------- tiện ích ---------- */
-  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function route(t) { return "#/doc/" + encodeURIComponent(t); }
   function lastPart(t) { var i = t.lastIndexOf("/"); return i < 0 ? t : t.slice(i + 1); }
   function parentOf(t) { var i = t.lastIndexOf("/"); return i < 0 ? null : t.slice(0, i); }
+  function rootOf(t) { return t.split("/")[0]; }
+  function setTitle(t) { document.title = t ? t + " · " + C.siteName : C.siteName; }
   function api(params) {
     var qs = Object.keys(params).map(function (k) { return k + "=" + encodeURIComponent(params[k]); }).join("&");
     return fetch(C.wikiApi + "?format=json&formatversion=2&origin=*&" + qs).then(function (r) {
@@ -22,10 +25,45 @@
       return r.json();
     });
   }
-  function setTitle(t) { document.title = t ? t + " · " + C.siteName : C.siteName; }
-  function catInfo(t) {
-    var root = t.split("/")[0];
-    return C.catalog.find(function (b) { return b.title === root || (existence && existence.get(b.title) === root); });
+  function book(t) {
+    var root = rootOf(t);
+    return C.catalog.find(function (b) { return b.title === root || (existence && existence.get(b.title) === root); }) || null;
+  }
+  function visibleBooks() {
+    return C.catalog.filter(function (b) { return !existence || existence.get(b.title); });
+  }
+  function bookHref(b) { return route(existence && existence.get(b.title) || b.title); }
+
+  /* ---------- bìa tự vẽ ---------- */
+  var PALETTES = [
+    ["#2b1f5c", "#5b3fd6", "#ffffff"], ["#0f5b54", "#16a394", "#ffffff"], ["#7a1f2b", "#d0504a", "#fff4ef"],
+    ["#f2c14e", "#e2873b", "#2a1a05"], ["#1d3557", "#457b9d", "#f1faee"], ["#3d2b1f", "#a0703f", "#fff3e2"],
+    ["#e9d8c4", "#c98a5a", "#2b1d12"], ["#22313f", "#d9a441", "#fff8e8"], ["#4a1d47", "#b24c8f", "#fff0fa"],
+    ["#d8e2dc", "#7fa99b", "#14231d"]
+  ];
+  function hash(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+  function palette(t) { return PALETTES[hash(rootOf(t)) % PALETTES.length]; }
+  function cover(t, author) {
+    var p = palette(t), name = rootOf(t);
+    var size = name.length > 14 ? "18px" : name.length > 8 ? "21px" : "25px";
+    return '<span class="cover" style="--c1:' + p[0] + ';--c2:' + p[1] + ';--c3:' + p[2] + ';--ct-size:' + size + '">' +
+      '<span class="ct">' + esc(name) + '</span><span class="ca">' + esc(author || "Wikisource") + '</span></span>';
+  }
+  function card(b, extra) {
+    return '<a class="card" href="' + (extra && extra.href || bookHref(b)) + '">' + cover(b.title, b.author) +
+      '<span class="t">' + esc(b.title) + '</span>' +
+      (extra && extra.bar != null ? '<span class="bar"><i style="width:' + extra.bar + '%"></i></span>' : "") +
+      '<span class="m">' + esc(extra && extra.meta || (b.author + " · " + b.genre)) + '</span></a>';
+  }
+
+  /* ---------- tiến độ & thư viện ---------- */
+  function progress() { return load("dx.progress", {}); }
+  function library() { return load("dx.library", []); }
+  function inLibrary(root) { return library().indexOf(root) >= 0; }
+  function toggleLibrary(root) {
+    var l = library(), i = l.indexOf(root);
+    if (i >= 0) l.splice(i, 1); else l.unshift(root);
+    save("dx.library", l); return i < 0;
   }
 
   /* ---------- kiểm tra tác phẩm còn trên Wikisource ---------- */
@@ -33,10 +71,9 @@
     if (existence) return Promise.resolve(existence);
     var titles = C.catalog.map(function (b) { return b.title; });
     return api({ action: "query", redirects: 1, titles: titles.join("|") }).then(function (d) {
-      var q = d.query || {}, map = new Map(), alias = {};
+      var q = d.query || {}, map = new Map(), alias = {}, ok = {};
       (q.normalized || []).forEach(function (n) { alias[n.from] = n.to; });
       (q.redirects || []).forEach(function (n) { alias[n.from] = n.to; });
-      var ok = {};
       (q.pages || []).forEach(function (p) { if (!p.missing && !p.invalid) ok[p.title] = true; });
       titles.forEach(function (t) {
         var r = t; for (var i = 0; i < 3 && alias[r]; i++) r = alias[r];
@@ -49,31 +86,26 @@
   /* ---------- tải & làm sạch một trang ---------- */
   function fetchPage(title) {
     if (cache.has(title)) return Promise.resolve(cache.get(title));
-    return api({ action: "parse", page: title, redirects: 1, prop: "text|displaytitle", disableeditsection: 1 }).then(function (d) {
+    return api({ action: "parse", page: title, redirects: 1, prop: "text", disableeditsection: 1 }).then(function (d) {
       if (d.error) throw new Error(d.error.code === "missingtitle" ? "missing" : d.error.info);
-      var real = d.parse.title;
-      var page = clean(d.parse.text, real);
-      page.title = real;
-      cache.set(title, page); cache.set(real, page);
+      var real = d.parse.title, page = clean(d.parse.text, real);
+      page.title = real; cache.set(title, page); cache.set(real, page);
       return page;
     });
   }
-
   function clean(html, title) {
-    var doc = new DOMParser().parseFromString(html, "text/html");
-    var root = doc.body;
+    var doc = new DOMParser().parseFromString(html, "text/html"), root = doc.body;
     root.querySelectorAll([
       "script", "style", "link", "meta", ".mw-editsection", ".noprint", ".navbox", ".ws-noexport",
       "#headerContainer", ".headertemplate", ".ws-header", ".wst-header", "#ws-data", ".mw-empty-elt",
       ".licenseContainer", ".licensetpl", ".PDheader", ".sisterproject", ".metadata", "#toc", ".toc"
     ].join(",")).forEach(function (n) { n.remove(); });
-
     var chapters = [], seen = {};
     root.querySelectorAll("a[href]").forEach(function (a) {
       var href = a.getAttribute("href");
       if (href.indexOf("/wiki/") === 0) {
         var t = decodeURIComponent(href.slice(6).split("#")[0]).replace(/_/g, " ");
-        if (t.indexOf(":") < 0) {               // trang nội dung (không phải Tác giả:, Thể loại:…)
+        if (t.indexOf(":") < 0) {
           a.setAttribute("href", route(t));
           if (t.indexOf(title + "/") === 0 && !seen[t]) { seen[t] = 1; chapters.push({ title: t, label: a.textContent.trim() || lastPart(t) }); }
         } else {
@@ -83,186 +115,266 @@
         a.target = "_blank"; a.rel = "noopener nofollow";
         if (href.indexOf("//") === 0) a.setAttribute("href", "https:" + href);
       } else if (href.indexOf("/w/") === 0) {
-        a.replaceWith(doc.createTextNode(a.textContent));   // link sửa đổi / trang chưa có
+        a.replaceWith(doc.createTextNode(a.textContent));
       }
     });
     root.querySelectorAll("img").forEach(function (img) {
-      ["src", "srcset"].forEach(function (k) {
-        var v = img.getAttribute(k); if (v) img.setAttribute(k, v.replace(/(^|\s)\/\//g, "$1https://"));
-      });
+      ["src", "srcset"].forEach(function (k) { var v = img.getAttribute(k); if (v) img.setAttribute(k, v.replace(/(^|\s)\/\//g, "$1https://")); });
       img.loading = "lazy";
     });
-    root.querySelectorAll("[style]").forEach(function (n) {   // bỏ màu cứng để hợp nền sáng/tối
+    root.querySelectorAll("[style]").forEach(function (n) {
       n.style.removeProperty("color"); n.style.removeProperty("background"); n.style.removeProperty("background-color");
     });
     var text = root.textContent.replace(/\s+/g, " ").trim();
-    return { html: root.innerHTML, chapters: chapters, textLength: text.length };
+    return { html: root.innerHTML, chapters: chapters, textLength: text.length, words: text.split(" ").length };
   }
 
   /* ---------- trang chủ ---------- */
+  function continueItems() {
+    var p = progress();
+    return Object.keys(p).map(function (k) { return Object.assign({ root: k }, p[k]); })
+      .sort(function (a, b) { return b.at - a.at; }).slice(0, 12);
+  }
   function viewHome() {
-    setTitle("");
-    var last = load("dx.last", null);
-    var genres = ["Tất cả"].concat(Array.from(new Set(C.catalog.map(function (b) { return b.genre; }))));
-    var html =
-      '<section class="hero"><h1>' + esc(C.tagline) + '</h1>' +
-      '<p>Đọc miễn phí, không cần tài khoản. Nội dung lấy từ kho văn bản mở Wikisource.</p></section>';
-    if (last) {
-      html += '<div class="section-h"><h2>Đang đọc dở</h2></div>' +
-        '<div class="continue"><div class="t">' + esc(last.label) + '<small>' + esc(last.book) + '</small></div>' +
-        '<a class="btn" href="' + route(last.title) + '">Đọc tiếp</a></div>';
+    setTitle(""); nav("home");
+    var books = visibleBooks();
+    var feat = books.find(function (b) { return b.title === C.featured; }) || books[0];
+    var html = '<div class="wrap">';
+    if (feat) {
+      var fp = palette(feat.title);
+      html += '<section class="feature" style="--fc1:' + fp[0] + '">' + cover(feat.title, feat.author) +
+        '<div><div class="feature-k">Truyện nổi bật</div><h1>' + esc(feat.title) + '</h1>' +
+        '<div class="by">' + esc(feat.author) + ' · ' + esc(feat.year) + '</div>' +
+        '<p>' + esc(feat.blurb || "") + '</p><div class="acts">' +
+        '<a class="btn" href="' + bookHref(feat) + '">Đọc ngay</a>' +
+        '<button class="btn line" type="button" data-lib="' + esc(feat.title) + '">' + (inLibrary(feat.title) ? "Đã lưu vào thư viện" : "+ Thêm vào thư viện") + '</button>' +
+        '</div></div></section>';
     }
-    html += '<div class="section-h"><h2>Tủ sách</h2><span id="count">' + C.catalog.length + ' tác phẩm</span></div>' +
-      '<div class="filters seg" id="filters">' + genres.map(function (g, i) {
-        return '<button type="button" data-g="' + esc(g) + '" aria-pressed="' + (i === 0) + '">' + esc(g) + '</button>';
-      }).join("") + '</div><div class="shelf" id="shelf">' +
-      C.catalog.map(function (b) {
-        return '<a class="book" data-g="' + esc(b.genre) + '" data-t="' + esc(b.title) + '" href="' + route(b.title) + '">' +
-          '<span class="g">' + esc(b.genre) + '</span><span class="n">' + esc(b.title) + '</span>' +
-          '<span class="a">' + esc(b.author) + ' · <span class="y">' + esc(b.year) + '</span></span></a>';
-      }).join("") + '</div>';
+    var cont = continueItems();
+    if (cont.length) {
+      html += rowHtml("Đọc tiếp", "Quay lại đúng chương bạn đang đọc", cont.map(function (c) {
+        var b = book(c.root) || { title: c.root, author: "", genre: "" };
+        return card(b, { href: route(c.title), bar: c.total ? Math.round((c.idx + 1) / c.total * 100) : null, meta: c.label });
+      }));
+    }
+    (C.shelves || []).forEach(function (s) {
+      var list = books.filter(function (b) { return (b.tags || []).indexOf(s.tag) >= 0; });
+      if (list.length) html += rowHtml(s.name, s.sub, list.map(function (b) { return card(b); }));
+    });
+    html += '<div class="genres">' + (C.shelves || []).map(function (s) {
+      return '<a class="chip" href="#/browse/' + encodeURIComponent(s.tag) + '">' + esc(s.name) + '</a>';
+    }).join("") + '</div></div>';
     $app.innerHTML = html;
-
-    var shelf = document.getElementById("shelf");
-    document.getElementById("filters").addEventListener("click", function (e) {
-      var btn = e.target.closest("button"); if (!btn) return;
-      this.querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", b === btn); });
-      var g = btn.dataset.g;
-      shelf.querySelectorAll(".book").forEach(function (el) { el.hidden = g !== "Tất cả" && el.dataset.g !== g; });
-    });
-
-    checkCatalog().then(function (map) {
-      if (!map) return;
-      var n = 0;
-      shelf.querySelectorAll(".book").forEach(function (el) {
-        var r = map.get(el.dataset.t);
-        if (!r) el.classList.add("missing"); else { n++; el.setAttribute("href", route(r)); }
+    bindRows(); bindLib();
+  }
+  function rowHtml(name, sub, cards) {
+    return '<section class="row"><div class="row-h"><div><h2>' + esc(name) + '</h2>' + (sub ? '<p>' + esc(sub) + '</p>' : "") + '</div>' +
+      '<div class="row-nav"><button type="button" data-dir="-1" aria-label="Lùi">‹</button><button type="button" data-dir="1" aria-label="Tiếp">›</button></div></div>' +
+      '<div class="rail">' + cards.join("") + '</div></section>';
+  }
+  function bindRows() {
+    $app.querySelectorAll(".row").forEach(function (row) {
+      var rail = row.querySelector(".rail");
+      row.querySelectorAll(".row-nav button").forEach(function (b) {
+        b.addEventListener("click", function () { rail.scrollBy({ left: Number(b.dataset.dir) * rail.clientWidth * 0.85, behavior: "smooth" }); });
       });
-      var c = document.getElementById("count"); if (c) c.textContent = n + " tác phẩm";
     });
+  }
+  function bindLib() {
+    $app.querySelectorAll("[data-lib]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var added = toggleLibrary(b.dataset.lib);
+        b.textContent = added ? "Đã lưu vào thư viện" : "+ Thêm vào thư viện";
+      });
+    });
+  }
+
+  /* ---------- thể loại ---------- */
+  function viewBrowse(tag) {
+    setTitle("Thể loại"); nav("browse");
+    var books = visibleBooks();
+    var list = tag ? books.filter(function (b) { return (b.tags || []).indexOf(tag) >= 0; }) : books;
+    var shelf = (C.shelves || []).find(function (s) { return s.tag === tag; });
+    $app.innerHTML = '<div class="wrap"><div class="page-h"><h1>' + esc(shelf ? shelf.name : "Tất cả truyện") + '</h1><p>' + list.length + ' tác phẩm</p></div>' +
+      '<div class="genres" style="margin:16px 0 28px"><a class="chip" href="#/browse"' + (tag ? "" : ' aria-pressed="true"') + '>Tất cả</a>' +
+      (C.shelves || []).map(function (s) { return '<a class="chip" href="#/browse/' + encodeURIComponent(s.tag) + '"' + (s.tag === tag ? ' aria-pressed="true"' : "") + '>' + esc(s.name) + '</a>'; }).join("") +
+      '</div><div class="grid">' + list.map(function (b) { return card(b); }).join("") + '</div></div>';
+  }
+
+  /* ---------- thư viện ---------- */
+  function viewLibrary() {
+    setTitle("Thư viện"); nav("library");
+    var saved = library().map(function (t) { return book(t) || { title: t, author: "", genre: "" }; });
+    var cont = continueItems();
+    var html = '<div class="wrap"><div class="page-h"><h1>Thư viện của bạn</h1><p>Lưu trên trình duyệt này, không cần tài khoản.</p></div>';
+    html += '<section class="row"><div class="row-h"><div><h2>Đang đọc</h2></div></div>' + (cont.length ? '<div class="grid">' + cont.map(function (c) {
+      var b = book(c.root) || { title: c.root, author: "", genre: "" };
+      return card(b, { href: route(c.title), bar: c.total ? Math.round((c.idx + 1) / c.total * 100) : null, meta: c.label });
+    }).join("") + '</div>' : '<div class="empty">Chưa đọc truyện nào. <a href="#/">Khám phá tủ sách</a></div>') + '</section>';
+    html += '<section class="row"><div class="row-h"><div><h2>Đã lưu</h2></div></div>' + (saved.length ? '<div class="grid">' + saved.map(function (b) { return card(b); }).join("") + '</div>' :
+      '<div class="empty">Bấm “Thêm vào thư viện” ở trang truyện để lưu lại.</div>') + '</section></div>';
+    $app.innerHTML = html;
   }
 
   /* ---------- tìm kiếm ---------- */
   function viewSearch(q) {
-    setTitle("Tìm: " + q);
+    setTitle("Tìm: " + q); nav("");
     document.getElementById("q").value = q;
-    $app.innerHTML = '<div class="reader"><h1>Kết quả cho “' + esc(q) + '”</h1><div class="state">Đang tìm…</div></div>';
+    var local = visibleBooks().filter(function (b) {
+      var s = (b.title + " " + b.author).toLowerCase(); return s.indexOf(q.toLowerCase()) >= 0;
+    });
+    $app.innerHTML = '<div class="wrap"><div class="page-h"><h1>Kết quả cho “' + esc(q) + '”</h1></div>' +
+      (local.length ? '<section class="row"><div class="row-h"><div><h2>Trong tủ sách</h2></div></div><div class="grid">' + local.map(function (b) { return card(b); }).join("") + '</div></section>' : "") +
+      '<section class="row"><div class="row-h"><div><h2>Trên Wikisource</h2></div></div><div class="state" id="wsres">Đang tìm…</div></section></div>';
     api({ action: "query", list: "search", srsearch: q, srnamespace: 0, srlimit: 30 }).then(function (d) {
-      var hits = (d.query && d.query.search) || [];
-      var box = $app.querySelector(".state");
-      if (!hits.length) { box.textContent = "Không tìm thấy tác phẩm phù hợp. Thử tên tác giả hoặc tên truyện khác."; return; }
+      var hits = (d.query && d.query.search) || [], box = document.getElementById("wsres");
+      if (!box) return;
+      if (!hits.length) { box.textContent = "Không tìm thấy thêm tác phẩm nào. Thử tên tác giả hoặc tên truyện khác."; return; }
       var ul = document.createElement("ul"); ul.className = "results";
       ul.innerHTML = hits.map(function (h) {
-        var snip = h.snippet.replace(/<[^>]+>/g, "");
-        return '<li><a href="' + route(h.title) + '">' + esc(h.title) + '</a><p>' + esc(snip) + '…</p></li>';
+        return '<li><a href="' + route(h.title) + '">' + esc(h.title) + '</a><p>' + esc(h.snippet.replace(/<[^>]+>/g, "")) + '…</p></li>';
       }).join("");
       box.replaceWith(ul);
-    }).catch(function () { $app.querySelector(".state").textContent = "Không kết nối được Wikisource. Kiểm tra mạng rồi thử lại."; });
+    }).catch(function () { var b = document.getElementById("wsres"); if (b) b.textContent = "Không kết nối được Wikisource. Kiểm tra mạng rồi thử lại."; });
   }
 
   /* ---------- affiliate ---------- */
-  var A = C.affiliate || {};
   function pickLink() { var l = A.links || []; return l[Math.floor(Math.random() * l.length)]; }
   function isUnlocked() { return Date.now() < load("dx.unlockUntil", 0); }
   function shouldGate() {
     if (!A.enabled || !A.gateEvery || !(A.links || []).length || isUnlocked()) return false;
-    var n = load("dx.readCount", 0);
-    return n > 0 && n % A.gateEvery === 0;
+    var n = load("dx.readCount", 0); return n > 0 && n % A.gateEvery === 0;
   }
   function gateHtml(link) {
     return '<div class="gate" id="gate"><h3>' + esc(A.gateTitle) + '</h3><p>' + esc(A.gateText) + '</p>' +
       '<a class="btn" id="gateBtn" href="' + esc(link.url) + '" target="_blank" rel="noopener sponsored">' + esc(link.label) + ' ↗</a>' +
-      '<small>Liên kết tiếp thị liên kết. Chương sẽ mở khoá ngay khi bạn bấm.</small></div>';
+      '<small>Liên kết tiếp thị liên kết. Chương mở khoá ngay khi bạn bấm.</small></div>';
   }
-  function bannerHtml(book) {
+  function bannerHtml(b) {
     if (!A.enabled) return "";
-    var link = (book && book.shopee) ? { url: book.shopee, label: "Mua sách " + book.title } : pickLink();
+    var link = (b && b.shopee) ? { url: b.shopee, label: "Mua sách " + b.title } : pickLink();
     if (!link) return "";
     return '<div class="aff-banner"><span><span class="aff-tag">Gợi ý</span> · ' + esc(A.bannerText) + '</span>' +
       '<a href="' + esc(link.url) + '" target="_blank" rel="noopener sponsored">' + esc(link.label) + ' ↗</a></div>';
   }
 
-  /* ---------- trình đọc ---------- */
+  /* ---------- trang truyện / trình đọc ---------- */
   function viewDoc(title) {
-    $app.innerHTML = '<div class="reader"><div class="state">Đang tải “' + esc(title) + '”…</div></div>';
+    nav("");
+    $app.innerHTML = '<div class="wrap"><div class="state">Đang tải…</div></div>';
     window.scrollTo(0, 0);
     fetchPage(title).then(function (page) {
-      var parent = parentOf(page.title);
-      var isToc = page.chapters.length >= 2;
-      var book = catInfo(page.title);
-      setTitle(page.title.replace(/\//g, " · "));
-
-      var crumbs = '<nav class="crumbs"><a href="#/">Tủ sách</a>';
-      var parts = page.title.split("/"), acc = "";
-      parts.slice(0, -1).forEach(function (p) { acc = acc ? acc + "/" + p : p; crumbs += '<span>/</span><a href="' + route(acc) + '">' + esc(p) + '</a>'; });
-      crumbs += '</nav>';
-
-      var head = '<div class="reader">' + crumbs + '<h1>' + esc(lastPart(page.title)) + '</h1>';
-      if (book && !parent) head = head.replace('</h1>', '</h1><p style="margin:-14px 0 22px;color:var(--muted)">' + esc(book.author) + ' · ' + esc(book.year) + '</p>');
-
-      if (isToc) {
-        var intro = page.textLength > 600 ? '<div class="prose">' + page.html + '</div>' : "";
-        var first = page.chapters[0];
-        $app.innerHTML = head +
-          '<p><a class="btn" href="' + route(first.title) + '">Bắt đầu đọc</a></p>' +
-          '<div class="section-h"><h2>Mục lục</h2><span>' + page.chapters.length + ' phần</span></div>' +
-          '<ol class="toc">' + page.chapters.map(function (c, i) {
-            return '<li><a href="' + route(c.title) + '"><span class="num">' + (i + 1) + '</span><span>' + esc(c.label) + '</span></a></li>';
-          }).join("") + '</ol>' + intro + bannerHtml(book) + '</div>';
-        return;
-      }
-
-      // trang nội dung (chương hoặc truyện một trang)
-      var counted = load("dx.counted", {});
-      if (!counted[page.title]) {
-        counted[page.title] = 1; save("dx.counted", counted);
-        save("dx.readCount", load("dx.readCount", 0) + 1);
-      }
-      save("dx.last", { title: page.title, label: lastPart(page.title), book: parent ? parent.split("/")[0] : (book ? book.author : "") });
-
-      var gated = shouldGate();
-      var link = gated ? pickLink() : null;
-      $app.innerHTML = head +
-        '<div class="prose' + (gated ? ' gate-fade' : '') + '" id="prose">' + page.html + '</div>' +
-        (gated ? gateHtml(link) : "") +
-        '<div class="pager" id="pager"></div>' + bannerHtml(book) + '</div>';
-
-      if (gated) {
-        document.getElementById("gateBtn").addEventListener("click", function () {
-          save("dx.unlockUntil", Date.now() + (A.unlockMinutes || 30) * 60000);
-          document.getElementById("prose").classList.remove("gate-fade");
-          document.getElementById("gate").remove();
-        });
-      }
-      if (parent) buildPager(page.title, parent);
+      if (page.chapters.length >= 2) return viewStory(page);
+      return viewReader(page);
     }).catch(function (err) {
       var missing = err && err.message === "missing";
-      $app.innerHTML = '<div class="reader"><div class="state">' +
+      $app.innerHTML = '<div class="wrap"><div class="state">' +
         (missing ? "Trang “" + esc(title) + "” không có trên Wikisource." : "Không tải được nội dung. Kiểm tra kết nối mạng rồi tải lại trang.") +
-        '<p><a class="btn ghost" href="#/">Về tủ sách</a></p></div></div>';
+        '<p><a class="btn ghost" href="#/">Về trang chủ</a></p></div></div>';
     });
   }
 
-  function buildPager(title, parent) {
-    fetchPage(parent).then(function (p) {
-      var list = p.chapters, i = list.findIndex(function (c) { return c.title === title; });
-      var el = document.getElementById("pager"); if (!el || i < 0) return;
+  function viewStory(page) {
+    var b = book(page.title), root = rootOf(page.title), isRoot = !parentOf(page.title);
+    var name = isRoot ? page.title : lastPart(page.title);
+    setTitle(name);
+    var seen = load("dx.seen", {}), pr = progress()[root];
+    var resume = pr && pr.title.indexOf(page.title + "/") === 0 ? pr : null;
+    var first = page.chapters[0];
+    var shelfTags = b ? (b.tags || []).map(function (t) { var s = (C.shelves || []).find(function (x) { return x.tag === t; }); return s ? '<a class="tag" href="#/browse/' + encodeURIComponent(t) + '">' + esc(s.name) + '</a>' : ""; }).join("") : "";
+    $app.innerHTML = '<div class="wrap">' +
+      '<section class="story">' + cover(page.title, b ? b.author : "") +
+      '<div><h1>' + esc(name) + '</h1>' +
+      '<div class="by">' + (b ? 'của <b>' + esc(b.author) + '</b> · ' + esc(b.year) : (isRoot ? "" : 'thuộc <a href="' + route(parentOf(page.title)) + '">' + esc(parentOf(page.title)) + '</a>')) + '</div>' +
+      '<div class="stats"><div class="stat"><b>' + page.chapters.length + '</b><span>Phần</span></div>' +
+      (b ? '<div class="stat"><b>' + esc(b.genre) + '</b><span>Thể loại</span></div><div class="stat"><b>' + esc(b.year) + '</b><span>Năm</span></div>' : "") +
+      '<div class="stat"><b>Miễn phí</b><span>Phạm vi công cộng</span></div></div>' +
+      (b && b.blurb && isRoot ? '<p class="blurb">' + esc(b.blurb) + '</p>' : "") +
+      '<div class="acts">' + (resume ? '<a class="btn" href="' + route(resume.title) + '">Đọc tiếp: ' + esc(resume.label) + '</a><a class="btn ghost" href="' + route(first.title) + '">Đọc từ đầu</a>'
+        : '<a class="btn" href="' + route(first.title) + '">Bắt đầu đọc</a>') +
+      '<button class="btn line" type="button" data-lib="' + esc(root) + '">' + (inLibrary(root) ? "Đã lưu vào thư viện" : "+ Thêm vào thư viện") + '</button></div>' +
+      (shelfTags ? '<div class="tags">' + shelfTags + '</div>' : "") +
+      '</div></section>' +
+      '<section class="parts"><div class="parts-h"><h2>Mục lục</h2><span>' + page.chapters.length + ' phần</span></div><ol class="toc">' +
+      page.chapters.map(function (c, i) {
+        return '<li><a href="' + route(c.title) + '"><span class="num">' + (i + 1) + '</span><span class="lab">' + esc(c.label) + '</span>' +
+          (seen[c.title] ? '<span class="seen">Đã đọc</span>' : "") + '</a></li>';
+      }).join("") + '</ol>' +
+      (page.textLength > 600 ? '<div class="intro prose" style="margin-top:28px">' + page.html + '</div>' : "") +
+      bannerHtml(b) + '</section></div>';
+    bindLib();
+  }
+
+  function viewReader(page) {
+    var b = book(page.title), root = rootOf(page.title), parent = parentOf(page.title);
+    setTitle(page.title.replace(/\//g, " · "));
+    var seen = load("dx.seen", {});
+    if (!seen[page.title]) { seen[page.title] = 1; save("dx.seen", seen); save("dx.readCount", load("dx.readCount", 0) + 1); }
+    var gated = shouldGate(), link = gated ? pickLink() : null;
+    var minutes = Math.max(1, Math.round(page.words / 220));
+
+    $app.innerHTML =
+      '<div class="readbar"><div class="readbar-in wrap">' +
+      '<a class="mini" href="' + route(parent || root) + '" aria-label="Về trang truyện">' + cover(root, "") + '</a>' +
+      '<div class="info"><a href="' + route(parent || root) + '">' + esc(parent ? lastPart(parent) : root) + '</a><span>' + esc(lastPart(page.title)) + ' · ' + minutes + ' phút đọc</span></div>' +
+      '<label class="sr" for="chSel">Chọn chương</label><select id="chSel" hidden></select></div></div>' +
+      '<div class="wrap"><article class="reader"><h1>' + esc(lastPart(page.title)) + '</h1>' +
+      '<div class="prose' + (gated ? ' gate-fade' : '') + '" id="prose">' + page.html + '</div>' +
+      (gated ? gateHtml(link) : "") +
+      '<div class="pager" id="pager"></div>' + bannerHtml(b) + '</article></div>';
+
+    if (gated) {
+      document.getElementById("gateBtn").addEventListener("click", function () {
+        save("dx.unlockUntil", Date.now() + (A.unlockMinutes || 30) * 60000);
+        document.getElementById("prose").classList.remove("gate-fade");
+        document.getElementById("gate").remove();
+      });
+    }
+    var p = progress();
+    p[root] = { title: page.title, label: lastPart(page.title), idx: 0, total: 0, at: Date.now() };
+    save("dx.progress", p);
+    if (parent) wireChapters(page.title, parent, root);
+  }
+
+  function wireChapters(title, parent, root) {
+    fetchPage(parent).then(function (pp) {
+      var list = pp.chapters, i = list.findIndex(function (c) { return c.title === title; });
+      if (i < 0) return;
+      var p = progress();
+      if (p[root] && p[root].title === title) { p[root].idx = i; p[root].total = list.length; p[root].label = list[i].label; save("dx.progress", p); }
+      var sel = document.getElementById("chSel");
+      if (sel) {
+        sel.innerHTML = list.map(function (c, k) { return '<option value="' + esc(c.title) + '"' + (k === i ? " selected" : "") + '>' + (k + 1) + '. ' + esc(c.label) + '</option>'; }).join("");
+        sel.hidden = false;
+        sel.addEventListener("change", function () { location.hash = route(sel.value); });
+      }
+      var el = document.getElementById("pager"); if (!el) return;
       var prev = list[i - 1], next = list[i + 1];
       el.innerHTML =
         (prev ? '<a class="btn ghost" href="' + route(prev.title) + '">← ' + esc(prev.label) + '</a>' : '<a class="btn ghost" href="' + route(parent) + '">← Mục lục</a>') +
-        (next ? '<a class="btn" href="' + route(next.title) + '">' + esc(next.label) + ' →</a>' : '<a class="btn ghost" href="' + route(parent) + '">Hết · Mục lục</a>');
-      if (next) fetchPage(next.title).catch(function () {});   // tải trước chương sau
+        (next ? '<a class="btn next" href="' + route(next.title) + '">' + esc(next.label) + ' →</a>' : '<a class="btn next" href="' + route(parent) + '">Hết truyện · Mục lục</a>');
+      if (next) fetchPage(next.title).catch(function () {});
     }).catch(function () {});
   }
 
   /* ---------- định tuyến ---------- */
+  function nav(key) {
+    document.querySelectorAll("[data-nav]").forEach(function (a) { a.classList.toggle("on", a.dataset.nav === key); });
+  }
   function render() {
     var h = location.hash.replace(/^#/, "");
-    if (h.indexOf("/doc/") === 0) return viewDoc(decodeURIComponent(h.slice(5)));
-    if (h.indexOf("/search/") === 0) return viewSearch(decodeURIComponent(h.slice(8)));
-    viewHome();
+    var go = function () {
+      if (h.indexOf("/doc/") === 0) return viewDoc(decodeURIComponent(h.slice(5)));
+      if (h.indexOf("/search/") === 0) return viewSearch(decodeURIComponent(h.slice(8)));
+      if (h.indexOf("/browse") === 0) return viewBrowse(decodeURIComponent(h.slice(8)) || "");
+      if (h.indexOf("/library") === 0) return viewLibrary();
+      viewHome();
+    };
+    if (existence) return go();
+    $app.innerHTML = '<div class="wrap"><div class="state">Đang tải tủ sách…</div></div>';
+    checkCatalog().then(go);
   }
-  window.addEventListener("hashchange", render);
+  window.addEventListener("hashchange", function () { window.scrollTo(0, 0); render(); });
 
   document.getElementById("searchForm").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -283,23 +395,24 @@
     $set.querySelectorAll("[data-font]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.font === S.font); });
     save("dx.settings", S);
   }
-  $btn.addEventListener("click", function () { $set.hidden = !$set.hidden; $btn.setAttribute("aria-expanded", !$set.hidden); });
+  $btn.addEventListener("click", function (e) { e.stopPropagation(); $set.hidden = !$set.hidden; $btn.setAttribute("aria-expanded", !$set.hidden); });
   $set.addEventListener("click", function (e) {
+    e.stopPropagation();
     var b = e.target.closest("button"); if (!b) return;
     if (b.dataset.size) S.size = Math.min(28, Math.max(14, S.size + Number(b.dataset.size)));
     if (b.dataset.theme) S.theme = b.dataset.theme;
     if (b.dataset.font) S.font = b.dataset.font;
     applySettings();
   });
+  document.addEventListener("click", function () { if (!$set.hidden) { $set.hidden = true; $btn.setAttribute("aria-expanded", "false"); } });
 
-  /* thanh tiến độ đọc */
   var bar = document.createElement("div"); bar.className = "progress"; document.body.appendChild(bar);
   window.addEventListener("scroll", function () {
     var h = document.documentElement, max = h.scrollHeight - h.clientHeight;
     bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
   }, { passive: true });
 
-  document.getElementById("brand").textContent = C.siteName;
+  document.getElementById("brandName").textContent = C.siteName;
   applySettings();
   render();
 })();
