@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Đọc Xưa</title>
+<meta name="description" content="Đọc miễn phí tiểu thuyết, truyện và thơ Việt Nam đã thuộc về công chúng.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Be+Vietnam+Pro:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script>
+  /* áp dụng cài đặt đọc trước khi vẽ trang để không bị nháy */
+  try {
+    var s = JSON.parse(localStorage.getItem("dx.settings") || "{}");
+    if (s.theme && s.theme !== "auto") document.documentElement.dataset.theme = s.theme;
+    if (s.size) document.documentElement.style.setProperty("--read-size", s.size + "px");
+    if (s.font === "sans") document.documentElement.dataset.font = "sans";
+  } catch (e) {}
+</script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/" id="brand">Đọc Xưa</a>
+    <form class="search" id="searchForm" role="search">
+      <label class="sr" for="q">Tìm truyện</label>
+      <input id="q" type="search" placeholder="Tìm truyện, tác giả…" autocomplete="off">
+    </form>
+    <button class="iconbtn" id="settingsBtn" aria-label="Cài đặt đọc" aria-expanded="false">Aa</button>
+  </header>
+
+  <div class="settings" id="settings" hidden>
+    <div class="settings-row">
+      <span class="lbl">Cỡ chữ</span>
+      <div class="seg">
+        <button type="button" data-size="-1" aria-label="Chữ nhỏ hơn">A−</button>
+        <output id="sizeOut">19</output>
+        <button type="button" data-size="1" aria-label="Chữ lớn hơn">A+</button>
+      </div>
+    </div>
+    <div class="settings-row">
+      <span class="lbl">Nền</span>
+      <div class="seg" id="themeSeg">
+        <button type="button" data-theme="auto">Tự động</button>
+        <button type="button" data-theme="light">Sáng</button>
+        <button type="button" data-theme="paper">Giấy</button>
+        <button type="button" data-theme="dark">Tối</button>
+      </div>
+    </div>
+    <div class="settings-row">
+      <span class="lbl">Kiểu chữ</span>
+      <div class="seg" id="fontSeg">
+        <button type="button" data-font="serif">Có chân</button>
+        <button type="button" data-font="sans">Không chân</button>
+      </div>
+    </div>
+  </div>
+
+  <main id="app" class="wrap" aria-live="polite"></main>
+
+  <footer class="foot wrap">
+    <p>Nội dung tác phẩm được tải trực tiếp từ <a href="https://vi.wikisource.org" target="_blank" rel="noopener">Wikisource tiếng Việt</a> — tác phẩm thuộc phạm vi công cộng hoặc giấy phép CC BY-SA. Một số liên kết trên trang là liên kết tiếp thị liên kết.</p>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
