@@ -105,7 +105,7 @@
     }
     var ch = chs.find(function (c) { return c.title === title; });
     if (!ch) return Promise.reject(new Error("missing"));
-    return fetch("stories/" + lb.slug + "/" + ch.file).then(function (r) {
+    return fetch("stories/" + lb.slug + "/" + ch.file, { cache: "no-cache" }).then(function (r) {
       if (!r.ok) throw new Error("missing"); return r.text();
     }).then(function (txt) {
       var html = /\.txt$/i.test(ch.file)
