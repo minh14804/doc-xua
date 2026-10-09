@@ -202,6 +202,7 @@
       .sort(function (a, b) { return b.at - a.at; }).slice(0, 12);
   }
   function viewHome() {
+    document.dispatchEvent(new CustomEvent("dx:leave"));
     setTitle(""); nav("home");
     var books = visibleBooks();
     /* trang chủ chỉ hiện truyện có ảnh bìa; truyện chưa có bìa nằm trong trang thể loại */
@@ -262,6 +263,7 @@
 
   /* ---------- thể loại ---------- */
   function viewBrowse(tag) {
+    document.dispatchEvent(new CustomEvent("dx:leave"));
     setTitle("Thể loại"); nav("browse");
     var books = visibleBooks();
     var list = tag ? books.filter(function (b) { return (b.tags || []).indexOf(tag) >= 0; }) : books;
@@ -274,6 +276,7 @@
 
   /* ---------- thư viện ---------- */
   function viewLibrary() {
+    document.dispatchEvent(new CustomEvent("dx:leave"));
     setTitle("Thư viện"); nav("library");
     var saved = library().map(function (t) { return book(t) || { title: t, author: "", genre: "" }; });
     var cont = continueItems();
@@ -289,6 +292,7 @@
 
   /* ---------- tìm kiếm ---------- */
   function viewSearch(q) {
+    document.dispatchEvent(new CustomEvent("dx:leave"));
     setTitle("Tìm: " + q); nav("");
     document.getElementById("q").value = q;
     var local = visibleBooks().filter(function (b) {
@@ -374,6 +378,7 @@
   }
 
   function viewStory(page) {
+    document.dispatchEvent(new CustomEvent("dx:leave"));
     var b = book(page.title), root = rootOf(page.title), isRoot = !parentOf(page.title);
     var name = isRoot ? page.title : lastPart(page.title);
     setTitle(name);
@@ -417,11 +422,13 @@
       '<div class="readbar"><div class="readbar-in wrap">' +
       '<a class="mini" href="' + route(parent || root) + '" aria-label="Về trang truyện">' + cover(root, "") + '</a>' +
       '<div class="info"><a href="' + route(parent || root) + '">' + esc(parent ? lastPart(parent) : root) + '</a><span>' + esc(lastPart(page.title)) + ' · ' + minutes + ' phút đọc</span></div>' +
-      '<label class="sr" for="chSel">Chọn chương</label><select id="chSel" hidden></select></div></div>' +
+      '<label class="sr" for="chSel">Chọn chương</label><select id="chSel" hidden></select>' +
+      '<button type="button" class="iconbtn dg-btn" id="disguiseBtn" aria-label="Đọc ngụy trang" title="Đọc ngụy trang"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></button></div></div>' +
       '<div class="wrap"><article class="reader"><h1>' + esc(lastPart(page.title)) + '</h1>' +
       '<div class="prose" id="prose">' + page.html + '</div>' +
       '<div class="pager" id="pager"></div>' + bannerHtml(b) + '</article></div>';
     showGateIfPending();
+    document.dispatchEvent(new CustomEvent("dx:reader"));
     var p = progress();
     p[root] = { title: page.title, label: lastPart(page.title), idx: 0, total: 0, at: Date.now() };
     save("dx.progress", p);
