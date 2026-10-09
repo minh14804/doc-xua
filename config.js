@@ -11,14 +11,14 @@ window.SITE_CONFIG = {
 
   /* ---------- AFFILIATE ----------
      enabled      : bật/tắt toàn bộ phần affiliate
-     gateEvery    : cứ đọc N chương thì hiện ô "mở link để đọc tiếp" (0 = không chặn, chỉ hiện banner)
-     unlockMinutes: sau khi bấm link, mở khoá đọc tự do trong bao nhiêu phút
+     gateEvery    : cứ mở N chương thì bật popup "bấm link để đọc tiếp" (0 = không có popup, chỉ hiện banner).
+                    Popup giữ nguyên dù chuyển chương hay truyện khác, chỉ tắt khi người đọc bấm link;
+                    sau đó đếm lại từ đầu.
      links        : danh sách link affiliate (Shopee, Tiki, Lazada...). Mỗi lần chặn chọn ngẫu nhiên 1 link.
      → THAY các url "https://s.shopee.vn/XXXXXXXX" bằng link affiliate thật của bạn. */
   affiliate: {
     enabled: true,
     gateEvery: 3,
-    unlockMinutes: 30,
     gateTitle: "Ủng hộ Đọc Xưa để đọc tiếp",
     gateText: "Mở ưu đãi bên dưới trong tab mới, chương truyện sẽ tự mở khoá. Mỗi lượt ủng hộ giúp web duy trì miễn phí.",
     links: [

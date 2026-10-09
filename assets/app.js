@@ -291,15 +291,43 @@
 
   /* ---------- affiliate ---------- */
   function pickLink() { var l = A.links || []; return l[Math.floor(Math.random() * l.length)]; }
-  function isUnlocked() { return Date.now() < load("dx.unlockUntil", 0); }
-  function shouldGate() {
-    if (!A.enabled || !A.gateEvery || !(A.links || []).length || isUnlocked()) return false;
-    var n = load("dx.readCount", 0); return n > 0 && n % A.gateEvery === 0;
+  /* Popup affiliate:
+     - mỗi lần mở một chương (khác chương vừa xem) thì cộng 1;
+     - đủ gateEvery chương → bật cờ "đang chờ bấm link" (lưu trên máy);
+     - còn cờ thì chương nào, truyện nào cũng hiện popup cho tới khi bấm link;
+     - bấm link → xoá cờ, đếm lại từ 0. */
+  function gateOn() { return !!(A.enabled && A.gateEvery && (A.links || []).length); }
+  function countChapter(title) {
+    if (!gateOn()) return;
+    if (load("dx.lastViewed", "") === title) return;   // tải lại cùng chương không tính
+    save("dx.lastViewed", title);
+    var n = load("dx.sinceGate", 0) + 1;
+    save("dx.sinceGate", n);
+    if (n >= A.gateEvery) save("dx.gatePending", true);
   }
-  function gateHtml(link) {
-    return '<div class="gate" id="gate"><h3>' + esc(A.gateTitle) + '</h3><p>' + esc(A.gateText) + '</p>' +
+  function showGateIfPending() {
+    var old = document.getElementById("gateModal");
+    if (old) old.remove();
+    document.body.classList.remove("gated");
+    if (!gateOn() || !load("dx.gatePending", false)) return;
+    var link = pickLink();
+    var m = document.createElement("div");
+    m.id = "gateModal"; m.className = "gate-modal";
+    m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-labelledby", "gateTitle");
+    m.innerHTML = '<div class="gate-card"><div class="gate-icon" aria-hidden="true">♡</div>' +
+      '<h3 id="gateTitle">' + esc(A.gateTitle) + '</h3><p>' + esc(A.gateText) + '</p>' +
       '<a class="btn" id="gateBtn" href="' + esc(link.url) + '" target="_blank" rel="noopener sponsored">' + esc(link.label) + ' ↗</a>' +
-      '<small>Liên kết tiếp thị liên kết. Chương mở khoá ngay khi bạn bấm.</small></div>';
+      '<small>Liên kết tiếp thị liên kết. Truyện mở lại ngay khi bạn bấm.</small></div>';
+    document.body.appendChild(m);
+    document.body.classList.add("gated");
+    var btn = document.getElementById("gateBtn");
+    btn.focus();
+    btn.addEventListener("click", function () {
+      save("dx.gatePending", false);
+      save("dx.sinceGate", 0);
+      m.remove();
+      document.body.classList.remove("gated");
+    });
   }
   function bannerHtml(b) {
     if (!A.enabled) return "";
@@ -354,14 +382,15 @@
       (page.textLength > 600 ? '<div class="intro prose" style="margin-top:28px">' + page.html + '</div>' : "") +
       bannerHtml(b) + '</section></div>';
     bindLib();
+    showGateIfPending();
   }
 
   function viewReader(page) {
     var b = book(page.title), root = rootOf(page.title), parent = parentOf(page.title);
     setTitle(page.title.replace(/\//g, " · "));
     var seen = load("dx.seen", {});
-    if (!seen[page.title]) { seen[page.title] = 1; save("dx.seen", seen); save("dx.readCount", load("dx.readCount", 0) + 1); }
-    var gated = shouldGate(), link = gated ? pickLink() : null;
+    if (!seen[page.title]) { seen[page.title] = 1; save("dx.seen", seen); }
+    countChapter(page.title);
     var minutes = Math.max(1, Math.round(page.words / 220));
 
     $app.innerHTML =
@@ -370,17 +399,9 @@
       '<div class="info"><a href="' + route(parent || root) + '">' + esc(parent ? lastPart(parent) : root) + '</a><span>' + esc(lastPart(page.title)) + ' · ' + minutes + ' phút đọc</span></div>' +
       '<label class="sr" for="chSel">Chọn chương</label><select id="chSel" hidden></select></div></div>' +
       '<div class="wrap"><article class="reader"><h1>' + esc(lastPart(page.title)) + '</h1>' +
-      '<div class="prose' + (gated ? ' gate-fade' : '') + '" id="prose">' + page.html + '</div>' +
-      (gated ? gateHtml(link) : "") +
+      '<div class="prose" id="prose">' + page.html + '</div>' +
       '<div class="pager" id="pager"></div>' + bannerHtml(b) + '</article></div>';
-
-    if (gated) {
-      document.getElementById("gateBtn").addEventListener("click", function () {
-        save("dx.unlockUntil", Date.now() + (A.unlockMinutes || 30) * 60000);
-        document.getElementById("prose").classList.remove("gate-fade");
-        document.getElementById("gate").remove();
-      });
-    }
+    showGateIfPending();
     var p = progress();
     p[root] = { title: page.title, label: lastPart(page.title), idx: 0, total: 0, at: Date.now() };
     save("dx.progress", p);
