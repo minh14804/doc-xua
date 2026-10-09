@@ -35,11 +35,12 @@
   function bookHref(b) { return route(existence && existence.get(b.title) || b.title); }
 
   /* ---------- bìa tự vẽ ---------- */
+  /* bảng màu pastel: [nền bìa, hoạ tiết, chữ] */
   var PALETTES = [
-    ["#2b1f5c", "#5b3fd6", "#ffffff"], ["#0f5b54", "#16a394", "#ffffff"], ["#7a1f2b", "#d0504a", "#fff4ef"],
-    ["#f2c14e", "#e2873b", "#2a1a05"], ["#1d3557", "#457b9d", "#f1faee"], ["#3d2b1f", "#a0703f", "#fff3e2"],
-    ["#e9d8c4", "#c98a5a", "#2b1d12"], ["#22313f", "#d9a441", "#fff8e8"], ["#4a1d47", "#b24c8f", "#fff0fa"],
-    ["#d8e2dc", "#7fa99b", "#14231d"]
+    ["#f9d5df", "#f2a7bd", "#5a2236"], ["#e6dcf5", "#b9a3e3", "#3a2560"], ["#fde2cf", "#f5b58c", "#5b3016"],
+    ["#d9ecdf", "#a3cfb2", "#22432f"], ["#fbe9b7", "#f0cd6e", "#4d3a08"], ["#f6d0c8", "#e79a8b", "#5a2419"],
+    ["#d6e6f5", "#9ec2e6", "#1f3a57"], ["#efd3ea", "#d79fcd", "#4f2148"], ["#f3e3d3", "#d9b391", "#4a3020"],
+    ["#c96a8e", "#e8a2bd", "#ffffff"], ["#8f78c9", "#bba8ec", "#ffffff"]
   ];
   function hash(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
   function palette(t) { return PALETTES[hash(rootOf(t)) % PALETTES.length]; }
@@ -47,7 +48,7 @@
     var p = palette(t), name = rootOf(t);
     var size = name.length > 14 ? "18px" : name.length > 8 ? "21px" : "25px";
     return '<span class="cover" style="--c1:' + p[0] + ';--c2:' + p[1] + ';--c3:' + p[2] + ';--ct-size:' + size + '">' +
-      '<span class="ct">' + esc(name) + '</span><span class="ca">' + esc(author || "Wikisource") + '</span></span>';
+      '<span class="flower"></span><span class="ct">' + esc(name) + '</span><span class="ca">' + esc(author || "Đọc Xưa") + '</span></span>';
   }
   function card(b, extra) {
     return '<a class="card" href="' + (extra && extra.href || bookHref(b)) + '">' + cover(b.title, b.author) +
@@ -69,9 +70,17 @@
   /* ---------- kiểm tra tác phẩm còn trên Wikisource ---------- */
   function checkCatalog() {
     if (existence) return Promise.resolve(existence);
-    var titles = C.catalog.map(function (b) { return b.title; });
-    return api({ action: "query", redirects: 1, titles: titles.join("|") }).then(function (d) {
+    var titles = C.catalog.filter(function (b) { return b.source !== "local"; }).map(function (b) { return b.title; });
+    var locals = C.catalog.filter(function (b) { return b.source === "local"; });
+    var batches = [];
+    for (var i = 0; i < titles.length; i += 50) batches.push(titles.slice(i, i + 50));
+    return Promise.all(batches.map(function (bt) { return api({ action: "query", redirects: 1, titles: bt.join("|") }); })).then(function (ds) {
+      var d = { query: { normalized: [], redirects: [], pages: [] } };
+      ds.forEach(function (x) { var q = x.query || {}; ["normalized", "redirects", "pages"].forEach(function (k) { d.query[k] = d.query[k].concat(q[k] || []); }); });
+      return d;
+    }).then(function (d) {
       var q = d.query || {}, map = new Map(), alias = {}, ok = {};
+      locals.forEach(function (b) { map.set(b.title, b.title); });
       (q.normalized || []).forEach(function (n) { alias[n.from] = n.to; });
       (q.redirects || []).forEach(function (n) { alias[n.from] = n.to; });
       (q.pages || []).forEach(function (p) { if (!p.missing && !p.invalid) ok[p.title] = true; });
@@ -84,8 +93,36 @@
   }
 
   /* ---------- tải & làm sạch một trang ---------- */
+  /* truyện riêng lưu trong repo: thư mục stories/<slug>/ */
+  function localBook(t) {
+    return C.catalog.find(function (b) { return b.source === "local" && b.title === rootOf(t); }) || null;
+  }
+  function fetchLocal(lb, title) {
+    var chs = (lb.chapters || []).map(function (c) { return { title: lb.title + "/" + c.label, label: c.label, file: c.file }; });
+    if (title === lb.title) {
+      var p = { title: title, chapters: chs, html: "", textLength: 0, words: 0, isStory: true };
+      cache.set(title, p); return Promise.resolve(p);
+    }
+    var ch = chs.find(function (c) { return c.title === title; });
+    if (!ch) return Promise.reject(new Error("missing"));
+    return fetch("stories/" + lb.slug + "/" + ch.file).then(function (r) {
+      if (!r.ok) throw new Error("missing"); return r.text();
+    }).then(function (txt) {
+      var html = /\.txt$/i.test(ch.file)
+        ? txt.split(/\n\s*\n/).map(function (p) { return "<p>" + esc(p.trim()).replace(/\n/g, "<br>") + "</p>"; }).join("")
+        : txt;
+      var doc = new DOMParser().parseFromString(html, "text/html");
+      doc.querySelectorAll("script,style,iframe,object,embed").forEach(function (n) { n.remove(); });
+      var text = doc.body.textContent.replace(/\s+/g, " ").trim();
+      var p = { title: title, chapters: [], html: doc.body.innerHTML, textLength: text.length, words: text.split(" ").length };
+      cache.set(title, p); return p;
+    });
+  }
+
   function fetchPage(title) {
     if (cache.has(title)) return Promise.resolve(cache.get(title));
+    var lb = localBook(title);
+    if (lb) return fetchLocal(lb, title);
     return api({ action: "parse", page: title, redirects: 1, prop: "text", disableeditsection: 1 }).then(function (d) {
       if (d.error) throw new Error(d.error.code === "missingtitle" ? "missing" : d.error.info);
       var real = d.parse.title, page = clean(d.parse.text, real);
@@ -142,7 +179,7 @@
     var html = '<div class="wrap">';
     if (feat) {
       var fp = palette(feat.title);
-      html += '<section class="feature" style="--fc1:' + fp[0] + '">' + cover(feat.title, feat.author) +
+      html += '<section class="feature" style="--fc1:' + fp[0] + ';--fc3:' + fp[2] + '">' + cover(feat.title, feat.author) +
         '<div><div class="feature-k">Truyện nổi bật</div><h1>' + esc(feat.title) + '</h1>' +
         '<div class="by">' + esc(feat.author) + ' · ' + esc(feat.year) + '</div>' +
         '<p>' + esc(feat.blurb || "") + '</p><div class="acts">' +
@@ -264,7 +301,7 @@
     $app.innerHTML = '<div class="wrap"><div class="state">Đang tải…</div></div>';
     window.scrollTo(0, 0);
     fetchPage(title).then(function (page) {
-      if (page.chapters.length >= 2) return viewStory(page);
+      if (page.isStory || page.chapters.length >= 2) return viewStory(page);
       return viewReader(page);
     }).catch(function (err) {
       var missing = err && err.message === "missing";
