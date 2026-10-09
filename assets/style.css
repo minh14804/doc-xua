@@ -3,17 +3,18 @@
    Bảng màu "hoa đào": nền hồng phấn rất nhạt, chữ nâu mận, điểm nhấn hồng đào, phụ tím oải hương.
    Góc bo lớn, bóng mềm, tiêu đề chữ có chân nghiêng thanh mảnh. */
 :root {
-  --bg: #fff8f8;
+  --top: #e3f3ee;
+  --bg: #f8fbfa;
   --surface: #ffffff;
-  --sunk: #fcedf0;
-  --ink: #3b2a33;
-  --muted: #8a7380;
-  --line: #f1dde3;
-  --accent: #c9567f;
-  --accent-soft: #fde6ee;
+  --sunk: #ecf5f2;
+  --ink: #2b3a37;
+  --muted: #6a7d78;
+  --line: #dce9e5;
+  --accent: #3a7d71;
+  --accent-soft: #dcf0ea;
   --accent-ink: #ffffff;
-  --teal: #8a74c4;
-  --shadow: 0 2px 6px rgba(201, 86, 127, .06), 0 12px 32px rgba(120, 60, 90, .08);
+  --teal: #5f8fb3;
+  --shadow: 0 2px 6px rgba(58, 125, 113, .06), 0 12px 32px rgba(40, 80, 72, .08);
   --radius: 18px;
   --font-display: "Cormorant Garamond", "Literata", Georgia, serif;
   --font-read: "Literata", Georgia, "Times New Roman", serif;
@@ -22,20 +23,20 @@
   color-scheme: light;
 }
 :root[data-theme="paper"] {
-  --bg: #f8f0e6; --surface: #fcf7f0; --sunk: #f1e4d6; --ink: #3d2c26; --muted: #806b60;
-  --line: #ead9c8; --accent: #b8566f; --accent-soft: #f6e0e2;
+  --top: #efe6d6; --bg: #f8f2e8; --surface: #fcf8f1; --sunk: #f0e7d8; --ink: #3a3128; --muted: #7d6f60;
+  --line: #e6dac8; --accent: #4f7d6c; --accent-soft: #e2ecdf;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="paper"]) {
-    --bg: #1c1519; --surface: #251c21; --sunk: #2e2329; --ink: #f3e6ec; --muted: #b9a3ae;
-    --line: #3a2d34; --accent: #f29bb9; --accent-soft: #3d2632; --accent-ink: #2a1520; --teal: #bba8ec;
+    --top: #1d2826; --bg: #141a19; --surface: #1b2321; --sunk: #222c2a; --ink: #e3eeeb; --muted: #9db1ac;
+    --line: #2c3936; --accent: #8fd1c1; --accent-soft: #233a35; --accent-ink: #0f1f1b; --teal: #9cc3e0;
     --shadow: 0 2px 6px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.35);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #1c1519; --surface: #251c21; --sunk: #2e2329; --ink: #f3e6ec; --muted: #b9a3ae;
-  --line: #3a2d34; --accent: #f29bb9; --accent-soft: #3d2632; --accent-ink: #2a1520; --teal: #bba8ec;
+  --top: #1d2826; --bg: #141a19; --surface: #1b2321; --sunk: #222c2a; --ink: #e3eeeb; --muted: #9db1ac;
+  --line: #2c3936; --accent: #8fd1c1; --accent-soft: #233a35; --accent-ink: #0f1f1b; --teal: #9cc3e0;
   --shadow: 0 2px 6px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.35);
   color-scheme: dark;
 }
@@ -344,7 +345,12 @@ button { font: inherit; }
 .row-h h2, .page-h h1, .parts-h h2 { font-family: var(--font-display); font-weight: 600; font-style: italic; font-size: 30px; letter-spacing: 0; }
 .page-h h1 { font-size: 38px; }
 .row-nav button { border-color: transparent; background: var(--accent-soft); color: var(--accent); }
-.btn { font-weight: 700; box-shadow: 0 6px 16px rgba(201, 86, 127, .18); }
+.btn { font-weight: 700; box-shadow: 0 6px 16px rgba(58, 125, 113, .16); }
+.topbar { background: var(--top); border-bottom-color: transparent; }
+.topbar .search input { background: var(--surface); }
+.topbar .iconbtn { background: var(--surface); }
+.nav a.on { background: var(--surface); }
+.readbar { background: color-mix(in srgb, var(--top) 80%, transparent); border-bottom-color: transparent; }
 .btn.ghost, .btn.line { box-shadow: none; }
 .chip { font-weight: 600; }
 .story h1, .reader h1 { font-weight: 600; font-style: italic; }
